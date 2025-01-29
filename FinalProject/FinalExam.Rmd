@@ -38,7 +38,7 @@ library(knitr)
 library(pROC)
 
 # Read in the data 
-titanic <- read.csv("/Users/kianabunnell/Desktop/DeleteThis/Titanic_complete.csv", stringsAsFactors = TRUE)
+titanic <- read.csv("Titanic_complete.csv", stringsAsFactors = TRUE)
 titanic$Pclass <- factor(titanic$Pclass) # Pclass as factor 
 
 ## Variable selection
