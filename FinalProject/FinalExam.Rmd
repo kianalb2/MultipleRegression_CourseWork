@@ -1,0 +1,332 @@
+---
+title: "Final Exam"
+author: "Kiana Bunnell"
+date: "4/17/2021"
+output: html_document
+---
+<br> 
+<br>
+
+## Preliminary Model Selection 
+<br>
+
+### Question 1
+The response variable is whether or not the 712 individuals included survived the sinking of the Titanic. The covariates for this dataset are: ticket class (Pclass), sex, age, number of siblings and spouses aboard (SibSp), number of parents and children aboard (Parch), passenger fare (Fare), and port of embarkation (Embarked).
+
+<br>
+<br>
+
+### Question 2 
+The principle goal of this analysis is to determine which of the explanatory variables significantly influenced the probability of survival on the Titanic. <br>
+
+Because our response variable is binary (Did the person survive? yes=1, no=0), a Logistic Regression Model (LRM) would be most appropriate. A LRM will ensure that our predictions will be bounded between {0,1} and will make our coefficients interpretable (which is of principle interest because our goal is inference). 
+
+<br>
+<br>
+
+### Question 3
+```{r, echo=FALSE, message=FALSE}
+################
+## Question 3 ##
+################
+
+# Call needed libraries
+library(bestglm)
+library(ggplot2)
+library(car)
+library(knitr)
+library(pROC)
+
+# Read in the data 
+titanic <- read.csv("/Users/kianabunnell/Desktop/DeleteThis/Titanic_complete.csv", stringsAsFactors = TRUE)
+titanic$Pclass <- factor(titanic$Pclass) # Pclass as factor 
+
+## Variable selection
+var.select <- bestglm(titanic,IC="BIC",family=binomial,method = "exhaustive")
+#var.select$BestModel
+
+## Fit the best model, based on variable selection
+(best_model <- glm(Survived ~ Pclass + Sex + Age + SibSp, data=titanic, family="binomial"))
+
+```
+<br> 
+
+#### Variable Selection Criterion Justification (part a)
+I chose Bayesian Information Criterion (BIC) as my model selection criterion for a number of reasons. (1) Based on derivations, BIC generally serves as the best model selection tool when the goal of the analysis is inference. Furthermore (2) I'm interested in model parsimony--I want the simplest model possible that will accomplish our goals without unnecessary overcomplication. <br>
+
+#### Balance Between Model Fit and Model Complexity (part b)
+BIC is a nice balance between model fit and model size/complexity because we are avoiding overfitting. While including all of the original covariates might lead to models that fit the data extremely well, we'll be left with poor prediction and misleading or unstable coefficient estimates. Since we're highly interested in being able to interpret our coefficients and being able to determine which factors most influenced probability of survival, less is more. <br>
+
+#### "Best" Logistic Regression Model (part c)
+$$ \mathrm{log} (\frac{p_i}{1-p_i}) = \beta_0 + \beta_1I(\mathrm{Pclass}_i = 2) + \beta_2I(\mathrm{Pclass}_i = 3) + \beta_3I(\mathrm{Sex}_i = Male) + \beta_4(\mathrm{Age}_i) +\beta_5(\mathrm{SibSp}_i)\\
+y_i \overset{ind}{\sim} \mathrm{Bern}(p_i) $$
+
+<br>
+<br>
+
+### Question 4
+Our LRM relies on the following assumptions: <br>
+<br>
+
+#### Linearity in Log-odds (Monotone in Probability)
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+################
+## Question 4 ##
+################
+
+# plot between age vs survival
+ggplot(titanic, aes(x=Age,y=Survived)) +
+  geom_smooth() +
+  geom_jitter(width = .5,height = .1)
+
+# plot between sibsp and survival
+ggplot(titanic, aes(x=SibSp,y=Survived)) +
+  geom_smooth() +
+  geom_jitter(width = .5,height = .1)
+
+# added-variable plots 
+avPlots(best_model)
+
+```
+<br>
+The Linearity in Log-odds assumption is not clear-cut. For the Age and SibSp variables we can use a smoothed scatterplot to check our assumption. Neither appears to obviously be monotone in probability, however, there is increased uncertainty at the bounds that could be responsible for this. For instance, for the SibSp (number of siblings and spouses) variable, the majority of points are between 0-1. After about 1 sibling/spouse the smoothed line goes from increasing to decreasing, which could be attributed to uncertainty due to less data points. <br>
+
+We can also use added-variable plots to check this assumption. Age|others and SibSp|others still look okay (with limited grouping of points), while Pclass2|others and Pclass3|others might be a little more concerning. I don't have much experience with categorical covariates vs a binary response variable, so the lines that we're seeing might be okay, or they could be evidence of a pattern in the residuals. <br>
+
+The Sexmale|others plot resembles a tangent wave, which I would interpret to be a violation of linearity. I don't believe that this assumption is being met, which suggests that our model might improve if we considered a Nonlinear Regression Model as an alternative. <br>
+
+#### Independence 
+It is safe to assume that the death or survival of one passenger will not influence the death or survival of another passenger. We can assume independence. <br>
+
+#### Bernoulli Distributed 
+Our response has two possible outcomes $Y_i \in (0,1)$ which means it follows a Bernoulli distribution.
+
+<br>
+<br>
+<br>
+
+## Comparing Models with Interactions and/or Nonlinearity
+<br>
+
+### Question 5
+<br>
+
+**LRM with Pclass, Sex, Age, and SibSp:**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+################
+## Question 5 ##
+################
+
+## part a
+# fit regular model
+model_glm <- glm(Survived ~ Pclass + Sex + Age + SibSp, data = titanic, family = binomial)
+BIC(model_glm)
+
+```
+<br>
+
+**LRM with Pclass, Sex, SibSp, and a Cubic Polynomial for Age:**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+## part b
+# fit model w/ cubic polynomial
+cub_poly <- glm(Survived ~ Pclass + Sex + SibSp + poly(Age, 3), data = titanic, family=binomial)
+BIC(cub_poly)
+
+```
+<br>
+
+**LRM with Pclass, Sex, Age, SibSp, and Pclass\*Sex Interaction:**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+## part c 
+# fit model with interax
+model.glm.int <- glm(Survived~Sex*Pclass+Age+SibSp, data = titanic, family = binomial)
+BIC(model.glm.int)
+
+```
+<br>
+
+**LRM with Pclass, Sex, Sibsp, Age, and Pclass\*Sex and Age\*Sex Interactions:**
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+## part d
+# fit model with two interax
+model.glm.int2 <- glm(Survived~Sex*Pclass+Sex*Age+SibSp, data = titanic, family = binomial)
+BIC(model.glm.int2)
+
+```
+<br>
+
+Based on the above BIC values, the model including the Pclass, Sex, Age, and SibSp covariates with an interaction between Pclass and Sex was the best model. It has the lowest BIC at 654.87. 
+
+<br>
+<br>
+
+### Question 6
+
+#### Misclassification rate:
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+################
+## Question 6 ##
+################
+
+## Confusion matrix 
+pred.probs <- predict.glm(model.glm.int,type="response")
+cutoff <- .5   # Set cutoff to .5
+preds <- pred.probs > cutoff
+
+conf.mat <- table(preds,titanic$Survived)            ##### confusion matrix
+
+misclass_rate = 1 - sum(diag(conf.mat)) / sum(conf.mat)  ### misclassification rate
+misclass_rate       ### we are wrong 18.82% of the time using this cutoff
+
+```
+With a cutoff value at .5, our misclassification rate indicates that we are misclassifying whether or not an individual survived the sinking of the Titanic 18.82% of the time
+<br>
+<br>
+
+#### Sensitivity: 
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+### sensitivity (only cares about the true yes's)
+conf.mat[2,2] / (conf.mat[2,2] + conf.mat[1,2])    ## TP/(TP + FN)
+
+```
+Sensitivity represents the percent of true positives. In other words, 66.67% of the time when we say somebody survived, they actually did survive. 
+<br>
+<br>
+
+#### Specificity: 
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+### specificity (only cares about the true no's)
+conf.mat[1,1] / (conf.mat[1,1] + conf.mat[2,1])    ## TN/(FP + TN)
+
+```
+Specificity represents the percent of true negatives. In other words, 91.04% of the time when we say somebody died, they actually did die. 
+<br>
+<br>
+
+#### Brier Score:
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+### Brier Score:
+Survival_num <- as.numeric(titanic$Survived)
+
+## model based estimate
+mean((pred.probs - Survival_num)^2)
+
+```
+A Brier Score allows us to avoid using a cutoff to turn our prediction into a 0 or a 1 (i.e. died vs. survived). Instead we'll use a probability estimate found using the following equation $\frac{1}{N} \sum_{i=1}^N (y_i- \hat{p}_i)^2$.
+<br>
+<br>
+
+#### Area Under the Curve (AUC):
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# AUC
+my.roc <- roc(titanic$Survived,pred.probs)
+plot(my.roc,legacy.axes=TRUE)
+auc(my.roc)
+
+```
+In the plot, we're looking at the ROC (Receiver Operating Characteristic) Curve, which compares the sensitivity of our model to the false positive rate of many cut-off values. The ROC Curve is summarized by the AUC (Area Under the Curve) value of 0.8686. This value is fairly close to 1, indicating that we are correctly classifying most of our passengers.
+
+<br>
+<br>
+
+### Question 7
+Because we have fewer data points around the younger and older ages, it's possible that our model lacks proper flexibility to predict well. We're doing a polynomial regression where we are taking the variable Age and cubing it. So, instead of $\beta_4(\mathrm{Age}_i)$, we have $\beta_4(\mathrm{Age^3}_i)$.
+
+<br>
+<br>
+
+## Interpreting the Model
+<br>
+
+### Question 8
+Logistic Regression Models are asymptotically normal. This means that because we have sufficient data our regression coefficients--and the uncertainty that goes along with them--follow a normal distribution. Because of this, we can use z* for our hypothesis testing. 
+
+<br>
+<br>
+
+### Question 9
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+################
+## Question 9 ##
+################
+
+model.glm.int2
+```
+$\beta_{0}$: The log-odds are estimated to be 4.77 when sex is "female", ticket class (Pclass) is "1", and when age and number of siblings/spouses (SibSp) are zero. 
+
+<br>
+<br>
+
+### Question 10
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+#################
+## Question 10 ##
+#################
+
+CI <- round(confint(model.glm.int2),3)
+(CI_odds <- round(exp(CI),3))
+
+```
+Holding all else constant, we are 95% confident that as the number of siblings/spouses (SibSp) increases by 1, the estimated odds of passenger survival increases by a factor of 0.545 to 0.868. 
+
+<br>
+<br>
+
+### Question 11
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+#################
+## Question 11 ##
+#################
+
+# Effect of Sex + Age + Sex*Age
+(log_odds <- -2.61849961 + -0.03405335 + -0.02694431)
+
+# convert to percent
+round(100*(exp(log_odds) - 1),3)
+
+```
+
+**Change in the log-odds**: 
+Holding ticket class (Pclass) and number of siblings/spouses (SibSp) constant, as Age increases by 1 year and Sex = male, the estimated log-odds of survival change by -2.679497 more than when Sex = female. 
+<br>
+
+**Percent change in odds of survival**:
+Holding ticket class (Pclass) and number of siblings/spouses (SibSp) constant, as Age increases by 1 year and Sex = male, the estimated odds ($\frac{p(survivng)}{p(not \ survivng)}$) of survival change by -93.14% more than when Sex = female.
+
+<br>
+<br>
+
+### Question 12
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+#################
+## Question 12 ##
+#################
+
+# individual is female
+(female <- -3.90469421) 
+
+# individual is male (Sex + Pclass + Sex*Pclass + Sex*Age)
+(male <- -2.61849961 + -3.90469421 + 1.67645167 + -0.02694431)
+
+```
+
+**The individual is female**:
+Holding all else constant, the estimated log-odds of survival change by -3.90469421 more than when Pclass = 1. 
+<br> 
+
+**The individual is male**: 
+Holding age and number of siblings/spouses (SibSp) constant, when Sex = male the estimated log-odds of survival change by -4.873686 more than when Pclass = 1. 
+
+
+<br>
+<br>
+<br>
+<br>
+
+## Appendix 
+```{r, ref.label=knitr::all_labels(), echo = T, eval = F}
+
+```
+
